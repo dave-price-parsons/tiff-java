@@ -74,7 +74,7 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 		// Initialize the table, starting position, and old code
 		initializeTable();
 		position = 0;
-		int oldCode = 0;
+		byte[] oldValue = null;
 
 		// Read codes until end of input
 		int code = getNextCode(reader);
@@ -102,7 +102,7 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 				// Write the code value
 				byte[] value = table[code];
 				decodedStream.writeBytes(value);
-				oldCode = code;
+				oldValue = value;
 
 			} else {
 
@@ -114,20 +114,19 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 				    decodedStream.writeBytes(value);
 
 					// Create new value and add to table
-				    byte[] newValue = combine(table[oldCode], value);
+				    byte[] newValue = combine(oldValue, value);
 					addToTable(newValue);
-					oldCode = code;
+					oldValue = value;
 
 				} else {
 
 					// Create and write new value from old value
-					byte[] oldValue = table[oldCode];
 					byte[] newValue = combine(oldValue, oldValue);
 					decodedStream.writeBytes(newValue);
 
 					// Write value to the table
 					addToTable(newValue);
-					oldCode = code;
+					oldValue = newValue;
 				}
 			}
 
