@@ -2,8 +2,6 @@ package mil.nga.tiff.compression;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteOrder;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import mil.nga.tiff.io.ByteReader;
 import mil.nga.tiff.util.TiffException;
@@ -14,12 +12,6 @@ import mil.nga.tiff.util.TiffException;
  * @author osbornb
  */
 public class LZWCompression implements CompressionDecoder, CompressionEncoder {
-
-	/**
-	 * Logger
-	 */
-	private static final Logger logger = Logger.getLogger(LZWCompression.class
-			.getName());
 
 	/**
 	 * Clear code
@@ -55,11 +47,16 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 	 * Current byte length
 	 */
 	private int byteLength;
+	
+	/**
+	 * Any remaining code info from previous code reads.
+	 */
+	private int codeRemainder;
 
 	/**
-	 * Current byte compression position
+	 * The number of bits stored in codeRemainder
 	 */
-	private int position;
+	private int numBitsInCodeRemainer;
 
 	/**
 	 * {@inheritDoc}
@@ -73,7 +70,8 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 
 		// Initialize the table, starting position, and old code
 		initializeTable();
-		position = 0;
+		codeRemainder = 0;
+		numBitsInCodeRemainer = 0;
 		byte[] oldValue = null;
 
 		// Read codes until end of input
@@ -195,47 +193,19 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 	 * @return code
 	 */
 	private int getNextCode(ByteReader reader) {
-		int nextByte = getByte(reader);
-		position += byteLength;
-		return nextByte;
-	}
+        while( numBitsInCodeRemainer < byteLength ) {
+            if( !reader.hasByte() ) {
+                return EOI_CODE;
+            }
+            codeRemainder = (codeRemainder<<8) | reader.readUnsignedByte();
+            numBitsInCodeRemainer += 8;
+        }
 
-	/**
-	 * Get the next byte
-	 * 
-	 * @param reader
-	 *            byte reader
-	 * @return byte
-	 */
-	private int getByte(ByteReader reader) {
+        numBitsInCodeRemainer -= byteLength;
+        int code = codeRemainder >>> numBitsInCodeRemainer;
+        codeRemainder ^= code << numBitsInCodeRemainer;
 
-		int d = position % 8;
-		int a = (int) Math.floor(position / 8.0);
-		int de = 8 - d;
-		int ef = (position + byteLength) - ((a + 1) * 8);
-		int fg = 8 * (a + 2) - (position + byteLength);
-		int dg = (a + 2) * 8 - position;
-		fg = Math.max(0, fg);
-		if (a >= reader.byteLength()) {
-			logger.log(Level.WARNING,
-					"End of data reached without an end of input code");
-			return EOI_CODE;
-		}
-		int chunk1 = ((int) reader.readUnsignedByte(a))
-				& ((int) (Math.pow(2, 8 - d) - 1));
-		chunk1 = chunk1 << (byteLength - de);
-		int chunks = chunk1;
-		if (a + 1 < reader.byteLength()) {
-			int chunk2 = reader.readUnsignedByte(a + 1) >>> fg;
-			chunk2 = chunk2 << Math.max(0, byteLength - dg);
-			chunks += chunk2;
-		}
-		if (ef > 8 && a + 2 < reader.byteLength()) {
-			int hi = (a + 3) * 8 - (position + byteLength);
-			int chunk3 = reader.readUnsignedByte(a + 2) >>> hi;
-			chunks += chunk3;
-		}
-		return chunks;
+        return code;
 	}
 
 	/**
