@@ -49,6 +49,11 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 	private int byteLength;
 	
 	/**
+	 * The next code to cause a bit size increase
+	 */
+	private int nextBitSizeIncrease;
+	
+	/**
 	 * Any remaining code info from previous code reads.
 	 */
 	private int codeRemainder;
@@ -146,6 +151,7 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 			table[i] = new byte[]{ (byte)i };
 		}
 		maxCode = 257;
+		nextBitSizeIncrease = (2<<(MIN_BITS-1)) - 2;//510
 		byteLength = MIN_BITS;
 	}
 
@@ -153,9 +159,14 @@ public class LZWCompression implements CompressionDecoder, CompressionEncoder {
 	 * Check the byte length and increase if needed
 	 */
 	private void checkByteLength() {
-		if (byteLength < MAX_BITS && maxCode >= Math.pow(2, byteLength) - 2) {
-			byteLength++;
-		}
+        if( maxCode == nextBitSizeIncrease )
+        {
+            nextBitSizeIncrease = nextBitSizeIncrease*2 + 2;
+            if( byteLength < MAX_BITS )
+            {
+                byteLength++;
+            }
+        }
 	}
 
 	/**
